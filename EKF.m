@@ -10,83 +10,84 @@ classdef EKF < handle
         sig_b_h
         K_h
         dt
-        L
-        Q
+        Lm
+        QQ
         alph
-        t
+        tt
     end
     methods
-        function self = EKF(mu0, sig0, dt, sig_r, sig_th, alph, L, N)
+        % NN is total number of time pts
+        function self = EKF(mu0, sig0, dt, sig_r, sig_th, alph, Lm, NN)
             self.mu = mu0;
             self.sig = sig0;
-            self.mu_h = [self.mu, zeros(3,N-1)];
-            self.sig_h = [diag(self.sig), zeros(3,N-1)];
+            self.mu_h = [self.mu, zeros(3,NN-1)];
+            self.sig_h = [diag(self.sig), zeros(3,NN-1)];
             self.mu_b_h = self.mu_h;
             self.sig_b_h = self.sig_h;
-            self.K_h = zeros(3,2,N);
+            self.K_h = zeros(3,2,NN);
             self.dt = dt;
-            self.L = L;
-            self.Q = [sig_r^2, 0; 0, sig_th^2];
+            self.Lm = Lm;
+            self.QQ = [sig_r^2, 0; 0, sig_th^2];
             self.alph = alph;
         end
-        function self = update(self,t,u,z)
-            self.t = t;
-            self.predict(u);
-            self.correct(z);
+        function self = update(self,tt,uu,zz)
+            self.tt = tt;
+            self.predict(uu);
+            self.correct(zz);
         end
-        function self = predict(self,u)
+        function self = predict(self,uu)
             th = self.mu(3);
-            vt = u(1);
-            wt = u(2);
-            G = [1, 0, -vt/wt*cos(th)+vt/wt*cos(th+wt*self.dt);
+            vt = uu(1);
+            wt = uu(2);
+            GG = [1, 0, -vt/wt*cos(th)+vt/wt*cos(th+wt*self.dt);
                  0, 1, -vt/wt*sin(th)+vt/wt*sin(th+wt*self.dt);
                  0, 0, 1];
-            V = [(-sin(th)+sin(th+wt*self.dt))/wt,...
+            VV = [(-sin(th)+sin(th+wt*self.dt))/wt,...
                  (vt*(sin(th)-sin(th+wt*self.dt)))/wt^2+...
                  (vt*cos(th+wt*self.dt)*self.dt)/wt;
                  (cos(th)-cos(th+wt*self.dt))/wt,...
                  -(vt*(cos(th)-cos(th+wt*self.dt)))/wt^2+...
                  (vt*sin(th+wt*self.dt)*self.dt)/wt;
                   0, self.dt];
-            M = [self.alph(1)*vt^2+self.alph(2)*wt^2, 0;
+            MM = [self.alph(1)*vt^2+self.alph(2)*wt^2, 0;
                   0, self.alph(3)*vt^2+self.alph(4)*wt^2];
-              
+
             % Update estimates
             self.mu_bar = self.mu +...
                 [-vt/wt*sin(th)+vt/wt*sin(th+wt*self.dt);
                  vt/wt*cos(th)-vt/wt*cos(th+wt*self.dt);
                  wt*self.dt];
-            self.sig_bar = G*self.sig*G' + V*M*V';
-            
+            self.sig_bar = GG*self.sig*GG' + VV*MM*VV';
+
             % Update histories
-            self.mu_b_h(:,self.t) = self.mu_bar;
-            self.sig_b_h(:,self.t) = diag(self.sig_bar);
+            self.mu_b_h(:,self.tt) = self.mu_bar;
+            self.sig_b_h(:,self.tt) = diag(self.sig_bar);
         end
-        function self = correct(self,z)
+        function self = correct(self,zz)
             pz = 1;
-            for i = 1:length(self.L)
-                mx = self.L(1,i);
-                my = self.L(2,i);
+            for ii = 1:length(self.Lm)
+                mx = self.Lm(1,ii);
+                my = self.Lm(2,ii);
                 mbx = self.mu_bar(1);
                 mby = self.mu_bar(2);
                 mbth = self.mu_bar(3);
-                q = (mx - mbx)^2 + (my - mby)^2;
-                zhat = [sqrt(q);
+                qq = (mx - mbx)^2 + (my - mby)^2;
+                zhat = [sqrt(qq);
                         atan2((my-mby),(mx-mbx))-mbth];
-                H = [-(mx-mbx)/sqrt(q), -(my-mby)/sqrt(q), 0;
-                     (my-mby)/q, -(mx-mbx)/q, -1];
-                S = H*self.sig_bar*H' + self.Q;
-                K = self.sig_bar*H'/S;
-                self.mu_bar = self.mu_bar + K*(z(:,i)-zhat);
-                self.sig_bar = (eye(length(self.sig_bar))-K*H)*self.sig_bar;
-                pz = pz * sqrt(det(2*pi*S))*...
-                    exp(-1/2*(z(:,i)-zhat)'/S*(z(:,i)-zhat));
+                HH = [-(mx-mbx)/sqrt(qq), -(my-mby)/sqrt(qq), 0;
+                     (my-mby)/qq, -(mx-mbx)/qq, -1];
+                SS = HH*self.sig_bar*HH' + self.QQ;
+                KK = self.sig_bar*HH'/SS;
+                self.mu_bar = self.mu_bar + KK*(zz(:,ii)-zhat);
+                self.sig_bar = (eye(length(self.sig_bar))-KK*HH)*self.sig_bar;
+                pz = pz * sqrt(det(2*pi*SS))*...
+                    exp(-1/2*(zz(:,ii)-zhat)'/SS*(zz(:,ii)-zhat));
             end
             self.mu = self.mu_bar;
             self.sig = self.sig_bar;
-            self.mu_h(:,self.t) = self.mu;
-            self.sig_h(:,self.t) = diag(self.sig);
-            self.K_h(:,:,self.t) = K;
+            self.mu_h(:,self.tt) = self.mu;
+            self.sig_h(:,self.tt) = diag(self.sig);
+            self.K_h(:,:,self.tt) = KK;
         end
         function [mh,sh,mbh,sbh,kh] = get_estimates(self)
             mbh = self.mu_b_h;
