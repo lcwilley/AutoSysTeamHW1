@@ -36,27 +36,21 @@ classdef EKF < handle
             self.correct(zz);
         end
         function self = predict(self,uu)
+            % Unicycle model: [vt*cos(th); vt*sin(th); wt]
             th = self.mu(3);
-            vt = uu(1);
-            wt = uu(2);
-            GG = [1, 0, -vt/wt*cos(th)+vt/wt*cos(th+wt*self.dt);
-                 0, 1, -vt/wt*sin(th)+vt/wt*sin(th+wt*self.dt);
-                 0, 0, 1];
-            VV = [(-sin(th)+sin(th+wt*self.dt))/wt,...
-                 (vt*(sin(th)-sin(th+wt*self.dt)))/wt^2+...
-                 (vt*cos(th+wt*self.dt)*self.dt)/wt;
-                 (cos(th)-cos(th+wt*self.dt))/wt,...
-                 -(vt*(cos(th)-cos(th+wt*self.dt)))/wt^2+...
-                 (vt*sin(th+wt*self.dt)*self.dt)/wt;
-                  0, self.dt];
-            MM = [self.alph(1)*vt^2+self.alph(2)*wt^2, 0;
-                  0, self.alph(3)*vt^2+self.alph(4)*wt^2];
+            vt = u(1);
+            wt = u(2);
+            GG = eye(3);
+            GG(1,3) = vt*sin(th);
+            GG(2,3) = vt*cos(th);
+            VV = [cos(th), 0;
+                 sin(th), 0;
+                 0, self.dt];
+            MM = [self.alph(1)*vt^2, 0;
+                  0, self.alph(2)*wt^2];
 
             % Update estimates
-            self.mu_bar = self.mu +...
-                [-vt/wt*sin(th)+vt/wt*sin(th+wt*self.dt);
-                 vt/wt*cos(th)-vt/wt*cos(th+wt*self.dt);
-                 wt*self.dt];
+            self.mu_bar = self.mu + [vt*cos(th); vt*sin(th); wt*self.dt];
             self.sig_bar = GG*self.sig*GG' + VV*MM*VV';
 
             % Update histories
