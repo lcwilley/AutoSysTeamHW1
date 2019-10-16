@@ -1,19 +1,24 @@
 classdef EKF < handle
     properties
-        mu
-        sig
-        mu_h
-        sig_h
+        % Estimate and Covariance
         mu_bar
         sig_bar
+        mu
+        sig
+        % Histories
+        mu_h
+        sig_h
         mu_b_h
         sig_b_h
         K_h
+        % Time Parameters
         dt
+        tt
+        % Landmark Positions
         Lm
+        % Noise variables
         QQ
         alph
-        tt
     end
     methods
         % NN is total number of time pts
@@ -36,21 +41,27 @@ classdef EKF < handle
             self.correct(zz);
         end
         function self = predict(self,uu)
-            % Unicycle model: [vt*cos(th); vt*sin(th); wt]
+            % Unicycle model: [x+vt*cos(th)*dt; y+vt*sin(th)*dt; th+wt*dt]
+            % Unpack parameters
             th = self.mu(3);
-            vt = u(1);
-            wt = u(2);
+            vt = uu(1);
+            wt = uu(2);
+            
+            % Jacobian wrt state
             GG = eye(3);
-            GG(1,3) = vt*sin(th);
-            GG(2,3) = vt*cos(th);
-            VV = [cos(th), 0;
-                 sin(th), 0;
-                 0, self.dt];
+            GG(1,3) = vt*sin(th)*self.dt;
+            GG(2,3) = vt*cos(th)*self.dt;
+            % Jacobian wrt control
+            VV = [cos(th)*self.dt, 0;
+                  sin(th)*self.dt, 0;
+                  0, self.dt];
+            % Motion noise
             MM = [self.alph(1)*vt^2, 0;
                   0, self.alph(2)*wt^2];
 
             % Update estimates
-            self.mu_bar = self.mu + [vt*cos(th); vt*sin(th); wt*self.dt];
+            self.mu_bar = self.mu + [vt*cos(th)*self.dt;...
+                vt*sin(th)*self.dt; wt*self.dt];
             self.sig_bar = GG*self.sig*GG' + VV*MM*VV';
 
             % Update histories
@@ -60,11 +71,14 @@ classdef EKF < handle
         function self = correct(self,zz)
             pz = 1;
             for ii = 1:length(self.Lm)
+                % Unpack landmark and estimate positions
                 mx = self.Lm(1,ii);
                 my = self.Lm(2,ii);
                 mbx = self.mu_bar(1);
                 mby = self.mu_bar(2);
                 mbth = self.mu_bar(3);
+                
+                % Calculate predicted obsevation and Kalman gain
                 qq = (mx - mbx)^2 + (my - mby)^2;
                 zhat = [sqrt(qq);
                         atan2((my-mby),(mx-mbx))-mbth];
@@ -72,6 +86,8 @@ classdef EKF < handle
                      (my-mby)/qq, -(mx-mbx)/qq, -1];
                 SS = HH*self.sig_bar*HH' + self.QQ;
                 KK = self.sig_bar*HH'/SS;
+                
+                % Update estimate
                 self.mu_bar = self.mu_bar + KK*(zz(:,ii)-zhat);
                 self.sig_bar = (eye(length(self.sig_bar))-KK*HH)*self.sig_bar;
                 pz = pz * sqrt(det(2*pi*SS))*...
@@ -79,6 +95,8 @@ classdef EKF < handle
             end
             self.mu = self.mu_bar;
             self.sig = self.sig_bar;
+            
+            % Update histories
             self.mu_h(:,self.tt) = self.mu;
             self.sig_h(:,self.tt) = diag(self.sig);
             self.K_h(:,:,self.tt) = KK;
