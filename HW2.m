@@ -38,13 +38,14 @@ for tt = 2:NN
 end
 
 % For Grading (includes xx,yy,th, vv, om, tt)
-load('hw2_soln_data.mat')
+% load('hw2_soln_data.mat')
 XX = [xx;yy;th];
-ww = om;
+% ww = om;
 
 % Problem-defined range and bearing noise
 sig_r = 0.1; %m
 sig_th = 0.05; %rad
+sig_rth = [sig_r; sig_th];
 
 % Define landmark positions
 NL = 3; % Number of landmarks
@@ -57,11 +58,19 @@ Lm(:,3) = [6;-4];
 % Initialize observation data
 zz = zeros(2,NL,NN);
 z_true = zeros(2,NL,NN);
+% keyboard
 for tt = 1:NN
-    z_true(:,:,tt) = [sqrt((Lm(1,:)-xx(tt)).^2+(Lm(2,:)-yy(tt)).^2);
-        atan2(Lm(2,:)-yy(tt),Lm(1,:)-xx(tt))-th(tt)];
-    zz(:,:,tt) = [sqrt((Lm(1,:)-xx(tt)).^2+(Lm(2,:)-yy(tt)).^2)+sig_r*randn(1,NL);
-        atan2(Lm(2,:)-yy(tt),Lm(1,:)-xx(tt))-th(tt)+sig_th*randn(1,NL)];
+    lm_sub_xy = Lm - XX(1:2,tt);
+    z_true(:,:,tt) = [sqrt(sum(lm_sub_xy.^2, 1));
+            atan2(lm_sub_xy(2,:),lm_sub_xy(1,:)) - XX(3,tt)];
+    %
+    z_true(2,:,tt) = rad_wrap_pi(z_true(2,:,tt));
+
+    noise = sig_rth .* randn(2,NL);
+    %
+    zz(:,:,tt) = zz(:,:,tt) + noise;
+    %
+
 end
 
 % Initialize mu and sigma, then the extended Kalman filter
@@ -85,7 +94,7 @@ labels = {'X Position', 'Y Position', 'Heading', 'X Error', 'Y Error',...
 robotPlot = mobileRobotVis(XX(:,1),Lm,dt,Tf);
 for tt = 2:NN
     robotPlot.updatePlot(XX(:,tt));
-    pause(0.01)
+    pause(0.001)
 end
 
 % Plot true and estimated states versus time

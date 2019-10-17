@@ -6,6 +6,7 @@ classdef mobileRobotVis < handle
         state_history
         history_handle
         tt
+        robot_circ_pts
     end
     methods
         function self = mobileRobotVis(X0,Lm,dt,Tf)
@@ -28,7 +29,9 @@ classdef mobileRobotVis < handle
             self.tt = self.tt + 1;
 
             % Define the robot coordinates
-            robot_cors = circle([X0(1),X0(2)],self.radius,'n',100);
+            % robot_cors = circle([X0(1),X0(2)],self.radius,'n',100);
+            self.robot_circ_pts = tbot_circle(self.radius);
+            robot_cors = self.robot_circ_pts + [xx; yy];
             self.robot_handle = fill(robot_cors(1,:),...
             	robot_cors(2,:),[0.4,0.6,1]);
             self.bearing_handle = plot([xx,xx+self.radius*cos(th)],...
@@ -55,7 +58,8 @@ classdef mobileRobotVis < handle
             self.history_handle.YData = self.state_history(2,1:self.tt);
 
             % Update robot position
-            robot_cors = circle([XX(1),XX(2)],self.radius,'n',100);
+            % robot_cors = circle([XX(1),XX(2)],self.radius,'n',100);
+            robot_cors = self.robot_circ_pts + [xx; yy];
             self.robot_handle.XData = robot_cors(1,:);
             self.robot_handle.YData = robot_cors(2,:);
             self.bearing_handle.XData = [xx,xx+self.radius*cos(th)];
