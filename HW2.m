@@ -1,9 +1,11 @@
 clear
 clc
 
+load('processed_data.mat')
+
 % rng(0); % Fix the random number generator for debugging
 
-dt = 0.1;
+% dt = 0.1;
 Tf = 20;
 time = 0:dt:Tf;
 NN = length(time);
@@ -11,9 +13,9 @@ NN = length(time);
 % direction.
 
 % Robot initial conditions
-x0 = -5; %m
-y0 = -3; %m
-th0 = pi/2; %rad, 90 degrees
+x0 = 2.55; %m
+y0 = -1.7; %m
+th0 = 10 * pi/180; % pi/2; %rad, 90 degrees
 
 % Create linear and angular velocity commands
 vc = 1 + 0.5*cos(2*pi*0.2*time);
@@ -26,9 +28,9 @@ vv = vc + sqrt(alph(1)*vc.^2+alph(2)*wc.^2).*randn(1,NN);
 ww = wc + sqrt(alph(3)*vc.^2+alph(4)*wc.^2).*randn(1,NN);
 
 % Initialize truth data vectors, as well as observations
-xx = [x0, zeros(1,NN-1)];
-yy = [y0, zeros(1,NN-1)];
-th = [th0, zeros(1,NN-1)];
+xx = [x0, zeros(1, NN-1)];
+yy = [y0, zeros(1, NN-1)];
+th = [th0, zeros(1, NN-1)];
 
 % Fill in truth data based on experienced velocities
 for tt = 2:NN
@@ -39,48 +41,54 @@ end
 
 % For Grading (includes xx,yy,th, vv, om, tt)
 % load('hw2_soln_data.mat')
-XX = [xx;yy;th];
+XX = [xx; yy; th];
 % ww = om;
 
 % Problem-defined range and bearing noise
-sig_r = 0.1; %m
-sig_th = 0.05; %rad
+% TODO: tune these values
+sig_r = 0.1; % m
+sig_th = 0.05; % rad
 sig_rth = [sig_r; sig_th];
 
 % Define landmark positions
-NL = 3; % Number of landmarks
-Lm = zeros(2,NL);
-Lm(:,1) = [6;4];
-Lm(:,2) = [-7;8];
-Lm(:,3) = [6;-4];
-% Lm = [Lm [-9;-9]];
+
+% Lm = zeros(2,NL);
+% Lm(:,1) = [6; 4];
+% Lm(:,2) = [-7; 8];
+% Lm(:,3) = [6; -4];
+% % Lm = [Lm [-9;-9]];
+Lm = landmarks';
+NL = size(Lm,2); % Number of landmarks
 
 % Initialize observation data
 zz = zeros(2,NL,NN);
 z_true = zeros(2,NL,NN);
 % keyboard
-for tt = 1:NN
-    lm_sub_xy = Lm - XX(1:2,tt);
-    z_true(:,:,tt) = [sqrt(sum(lm_sub_xy.^2, 1));
-            atan2(lm_sub_xy(2,:),lm_sub_xy(1,:)) - XX(3,tt)];
-    %
-    z_true(2,:,tt) = rad_wrap_pi(z_true(2,:,tt));
-
-    noise = sig_rth .* randn(2,NL);
-    %
-    zz(:,:,tt) = zz(:,:,tt) + noise;
-    %
-
-end
+% for tt = 1:NN
+%     lm_sub_xy = Lm - XX(1:2,tt);
+%     z_true(:,:,tt) = [sqrt(sum(lm_sub_xy.^2, 1));
+%             atan2(lm_sub_xy(2,:),lm_sub_xy(1,:)) - XX(3,tt)];
+%     %
+%     z_true(2,:,tt) = rad_wrap_pi(z_true(2,:,tt));
+%
+%     noise = sig_rth .* randn(2,NL);
+%     %
+%     zz(:,:,tt) = zz(:,:,tt) + noise;
+%     %
+%
+% end
 
 % Initialize mu and sigma, then the extended Kalman filter
 mu0 = [x0;y0;th0];
 sig0 = [1 0 0; 0 1 0; 0 0 0.1];
-ekf = EKF(mu0,sig0,dt,sig_r,sig_th,alph,Lm,NN);
+ekf = EKF(mu0,sig0,sig_r,sig_th,alph,Lm,NN);
 
 % Run the states through the EKF
-for tt = 2:NN
-    ekf.update(tt,uu(:,tt),zz(:,:,tt));
+t_idx = 0;
+for tt = odom_t
+    t_idx = t_idx + 1;
+    dt = tt - odom_t(1,t_idx - 1);
+    ekf.update(t_idx, dt, uu(:,t_idx), zz(:,:,t_idx) );
 end
 
 

@@ -22,7 +22,7 @@ classdef EKF < handle
     end
     methods
         % NN is total number of time pts
-        function self = EKF(mu0, sig0, dt, sig_r, sig_th, alph, Lm, NN)
+        function self = EKF(mu0, sig0, sig_r, sig_th, alph, Lm, NN)
             self.mu = mu0;
             self.sig = sig0;
             self.mu_h = [self.mu, zeros(3,NN-1)];
@@ -30,13 +30,14 @@ classdef EKF < handle
             self.mu_b_h = self.mu_h;
             self.sig_b_h = self.sig_h;
             self.K_h = zeros(3,2,NN);
-            self.dt = dt;
+            % self.dt = dt;
             self.Lm = Lm;
             self.QQ = [sig_r^2, 0; 0, sig_th^2];
             self.alph = alph;
         end
-        function self = update(self,tt,uu,zz)
-            self.tt = tt;
+        function self = update(self, t_idx, dt, uu, zz)
+            self.t_idx = t_idx;
+            self.dt = dt;
             self.predict(uu);
             self.correct(zz);
         end
@@ -46,7 +47,7 @@ classdef EKF < handle
             th = self.mu(3);
             vt = uu(1);
             wt = uu(2);
-            
+
             % Jacobian wrt state
             GG = eye(3);
             GG(1,3) = vt*sin(th)*self.dt;
@@ -65,8 +66,8 @@ classdef EKF < handle
             self.sig_bar = GG*self.sig*GG' + VV*MM*VV';
 
             % Update histories
-            self.mu_b_h(:,self.tt) = self.mu_bar;
-            self.sig_b_h(:,self.tt) = diag(self.sig_bar);
+            self.mu_b_h(:,self.t_idx) = self.mu_bar;
+            self.sig_b_h(:,self.t_idx) = diag(self.sig_bar);
         end
         function self = correct(self,zz)
             pz = 1;
@@ -77,7 +78,7 @@ classdef EKF < handle
                 mbx = self.mu_bar(1);
                 mby = self.mu_bar(2);
                 mbth = self.mu_bar(3);
-                
+
                 % Calculate predicted obsevation and Kalman gain
                 qq = (mx - mbx)^2 + (my - mby)^2;
                 zhat = [sqrt(qq);
@@ -86,7 +87,7 @@ classdef EKF < handle
                      (my-mby)/qq, -(mx-mbx)/qq, -1];
                 SS = HH*self.sig_bar*HH' + self.QQ;
                 KK = self.sig_bar*HH'/SS;
-                
+
                 % Update estimate
                 self.mu_bar = self.mu_bar + KK*(zz(:,ii)-zhat);
                 self.sig_bar = (eye(length(self.sig_bar))-KK*HH)*self.sig_bar;
@@ -95,11 +96,11 @@ classdef EKF < handle
             end
             self.mu = self.mu_bar;
             self.sig = self.sig_bar;
-            
+
             % Update histories
-            self.mu_h(:,self.tt) = self.mu;
-            self.sig_h(:,self.tt) = diag(self.sig);
-            self.K_h(:,:,self.tt) = KK;
+            self.mu_h(:,self.t_idx) = self.mu;
+            self.sig_h(:,self.t_idx) = diag(self.sig);
+            self.K_h(:,:,self.t_idx) = KK;
         end
         function [mh,sh,mbh,sbh,kh] = get_estimates(self)
             mbh = self.mu_b_h;
