@@ -32,7 +32,7 @@ classdef EKF < handle
 
         function self = update(self, t_idx, dt, uu, zz)
             self.t_idx = t_idx;
-            dt = dt;
+            self.dt = dt;
             self.predict(uu);
             self.correct(zz);
         end
@@ -61,10 +61,11 @@ classdef EKF < handle
 
             % Update estimates
             mu_update = [vt*cos(th)*dt;
-                            vt*sin(th)*dt;
-                            wt*dt];
+                        vt*sin(th)*dt;
+                        rad_wrap_pi(wt*dt)];
             %
             self.mu = self.mu + mu_update;
+            self.mu(3) = rad_wrap_pi(self.mu(3));
             self.sig = GG*self.sig*GG' + VV*MM*VV';
 
             % Update histories
@@ -72,7 +73,7 @@ classdef EKF < handle
             self.sig_h(:,t_idx) = diag(self.sig);
         end
 
-        function self = correct(self, t_idx, dt, zz)
+        function self = correct(self, t_idx, zz)
             % ezpz = 1;
             KK = NaN;
             for ii = 1:length(self.Lm)
@@ -87,7 +88,7 @@ classdef EKF < handle
                     % Calculate predicted obsevation and Kalman gain
                     qq = (mx - mbx)^2 + (my - mby)^2;
                     zhat = [sqrt(qq);
-                            atan2((my-mby),(mx-mbx))-mbth];
+                            rad_wrap_pi(atan2((my-mby),(mx-mbx))-mbth)];
                     HH = [-(mx-mbx)/sqrt(qq), -(my-mby)/sqrt(qq), 0;
                         (my-mby)/qq, -(mx-mbx)/qq, -1];
                     SS = HH*self.sig*HH' + self.QQ;
@@ -95,6 +96,7 @@ classdef EKF < handle
 
                     % Update estimate
                     self.mu = self.mu + KK*(zz(:,ii)-zhat);
+                    self.mu(3) = rad_wrap_pi(self.mu(3));
                     self.sig = (eye(length(self.sig))-KK*HH)*self.sig;
                     % ezpz = ezpz * sqrt(det(2*pi*SS))*...
                     %     exp(-1/2*(zz(:,ii)-zhat)'/SS*(zz(:,ii)-zhat));

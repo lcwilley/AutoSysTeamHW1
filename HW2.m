@@ -84,7 +84,7 @@ for t_idx = 1:NN
         dt = tt - prev_t;
 
         zz = [l_depth(:,l_idx)'; l_bearing(:,l_idx)'];
-        ekf.correct(t_idx, dt, zz);
+        ekf.correct(t_idx, zz);
 
         l_idx = l_idx + 1;
     end
@@ -108,12 +108,9 @@ end
 
 estimate_time = sort(unique([odom_t l_time']));
 truth_data = zeros(3,length(estimate_time));
-est_idx = 1;
-for tru_idx = 1:length(t_truth)
-    if t_truth(tru_idx) > estimate_time(est_idx)
-        truth_data(:,est_idx) = [x_truth(tru_idx);y_truth(tru_idx);th_truth(tru_idx)];
-        est_idx = est_idx + 1;
-    end
+for est_idx = 1:length(estimate_time)
+    [~,tru_idx] = min(abs(t_truth-estimate_time(est_idx)));
+    truth_data(:,est_idx) = [x_truth(tru_idx);y_truth(tru_idx);th_truth(tru_idx)];
 end
 
 % Plot true and estimated states versus time
@@ -123,14 +120,14 @@ for ii = 1:3
     plot(odom_t,XX(ii,:),'color',[0 0.6588 0.8039]);
     plot(estimate_time,mu_h(ii,:),'color',[0 0.3098 0.4196],'LineStyle','--');
     xlabel('Time'); ylabel(labels(ii))
-    legend('Actual','Measured');
+    legend('Actual','Predicted');
 end
 
 figure(3)
 % Plot error and covariance over time
 for ii = 1:3
     subplot(3,1,ii); hold on;
-    plot(odom_t,XX(ii,:)-mu_h(ii,:),'color',[0 0.6588 0.8039]);
+    plot(estimate_time,truth_data(ii,:)-mu_h(ii,:),'color',[0 0.6588 0.8039]);
     plot(estimate_time,2*sqrt(sig_h(ii,:)),'color',[0 0.3098 0.4196])
     plot(estimate_time,-2*sqrt(sig_h(ii,:)),'color',[0 0.3098 0.4196])
     xlabel('Time'); ylabel(labels(3+ii))
