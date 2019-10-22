@@ -9,7 +9,7 @@ classdef mobileRobotVis < handle
         robot_circ_pts
     end
     methods
-        function self = mobileRobotVis(X0,Lm,dt,Tf)
+        function self = mobileRobotVis(X0,Lm,NN)
             % Unpack state
             xx = X0(1);
             yy = X0(2);
@@ -22,7 +22,7 @@ classdef mobileRobotVis < handle
 
             % Record and plot robot position history
             self.tt = 1;
-            self.state_history = zeros(3,Tf/dt + 1);
+            self.state_history = zeros(3,NN);
             self.state_history(:,self.tt) = X0;
             self.history_handle = plot(self.state_history(1,1),...
                 self.state_history(2,1),'b');
