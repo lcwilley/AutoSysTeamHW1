@@ -5,22 +5,14 @@ load('processed_data.mat')
 % Contains landmarks, l_time, l_depth, l_bearing, odom_t, pos_odom_se2, vel_odom
 load('truth_data.mat')
 % Contains t_truth, x_truth, y_truth, and th_truth
-% fix wrapping on th_truth
+% Fix wrapping on th_truth
 th_truth = rad_wrap_pi(th_truth);
 
-% consistencize time vector names
+% Make time vector names consistent
 lm_t = l_time;
 
-% rng(0); % Fix the random number generator for debugging
-
-% dt = 0.1;
-Tf = odom_t(end);
-% time = 0:dt:Tf;
-time = odom_t;
+% Define the total number of time steps
 NN = length(odom_t)+length(l_time);
-
-% Field of operation is 20m by 20m, presumably 10 m from 0 in each
-% direction.
 
 % Robot initial conditions
 x0 = 2.55; %m
@@ -31,6 +23,7 @@ th0 = 10 * pi/180; % pi/2; %rad, 90 degrees
 uu = vel_odom;
 
 % Create noisy output velocities
+% alph = [0.1, 0.01, 0.01, 0.1];
 alph = [0.1, 0.1];
 
 % Initialize truth data vectors, as well as observations
@@ -38,47 +31,45 @@ xx = [x0, zeros(1, NN-1)];
 yy = [y0, zeros(1, NN-1)];
 th = [th0, zeros(1, NN-1)];
 
-% % Fill in truth data based on commanded velocities
-
+% Truth data from the odemetry data
 XX = pos_odom_se2;
 
 % Problem-defined range and bearing noise
 % TODO: tune these values
-sig_r = 0.1; % m
-sig_th = 0.05; % rad
+sig_r = 0.7; % m
+sig_th = 0.8; % rad
 sig_rth = [sig_r; sig_th];
 
 % Define landmark positions
-
-% Lm = zeros(2,NL);
 Lm = landmarks';
 NLm = size(Lm,2); % Number of landmarks
-
-% measurements = [ ]
 
 % Initialize mu and sigma, then the extended Kalman filter
 mu0 = [x0;y0;th0];
 sig0 = [1 0 0; 0 1 0; 0 0 0.1];
-ekf = EKF(mu0,sig0,sig_r,sig_th,alph,Lm,NLm,NN);
+ekf = EKF(mu0,sig0,sig_r,sig_th,alph,Lm,NN);
 
 % Run the states through the EKF
 l_idx = 1; % index of current l_time
 o_idx = 1; % index of current odom_t
 prev_t = 0;
 for t_idx = 1:NN
-    % if t_idx ~= NN || odom_t(o_idx) < l_time(l_idx)
     if o_idx <= length(odom_t) && (l_idx > length(l_time) || odom_t(o_idx) < l_time(l_idx))
-    % if prev_t < odom_t(end) && (prev_t >= l_time(end) || odom_t(o_idx) < l_time(l_idx))
+        % use odom_t
 
         tt = odom_t(o_idx);
         dt = tt - prev_t;
 
-        ekf.predict(t_idx, dt, uu(:,o_idx));
+        if o_idx ~= 1
+            odom_dt = XX(:,o_idx) - XX(:,o_idx-1);
+        else
+            odom_dt = [0;0;0];
+        end
+        ekf.predict(t_idx, dt, uu(:,o_idx), odom_dt);
 
         o_idx = o_idx + 1;
-    % elseif t_idx == NN || l_time(l_idx) < odom_t(o_idx)
     elseif l_idx <= length(l_time) && (o_idx > length(odom_t) || l_time(l_idx) < odom_t(o_idx))
-    % elseif prev_t < lm_t(end) && (prev_t >= odom_t(end) || odom_t(o_idx) < l_time(l_idx))
+        % use l_time
 
         tt = l_time(l_idx);
         dt = tt - prev_t;
@@ -99,25 +90,30 @@ end
 labels = {'X Position', 'Y Position', 'Heading', 'X Error', 'Y Error',...
     'Heading Error'};
 
-% Plot the robot animation
-robotPlot = mobileRobotVis(XX(:,1),Lm,length(odom_t));
-for tt = 2:length(odom_t)
-    robotPlot.updatePlot(XX(:,tt));
-    pause(0.001)
-end
+% % Plot the robot animation
+% robotPlot = mobileRobotVis(XX(:,1),Lm,length(odom_t));
+% for tt = 2:length(odom_t)
+%     robotPlot.updatePlot(XX(:,tt));
+%     pause(0.001)
+% end
 
 estimate_time = sort(unique([odom_t l_time']));
 truth_data = zeros(3,length(estimate_time));
+odom_data = zeros(3,length(estimate_time));
 for est_idx = 1:length(estimate_time)
     [~,tru_idx] = min(abs(t_truth-estimate_time(est_idx)));
-    truth_data(:,est_idx) = [x_truth(tru_idx);y_truth(tru_idx);th_truth(tru_idx)];
+    truth_data(:,est_idx) = [x_truth(tru_idx);
+                            y_truth(tru_idx);
+                            th_truth(tru_idx)];
+    [~,o_idx] = min(abs(odom_t-estimate_time(est_idx)));
+    odom_data(:,est_idx) = pos_odom_se2(:,o_idx);
 end
 
 % Plot true and estimated states versus time
 figure(2)
 for ii = 1:3
     subplot(3,1,ii); hold on;
-    plot(odom_t,XX(ii,:),'color',[0 0.6588 0.8039]);
+    plot(estimate_time,truth_data(ii,:),'color',[0 0.6588 0.8039]);
     plot(estimate_time,mu_h(ii,:),'color',[0 0.3098 0.4196],'LineStyle','--');
     xlabel('Time'); ylabel(labels(ii))
     legend('Actual','Predicted');
@@ -127,9 +123,14 @@ figure(3)
 % Plot error and covariance over time
 for ii = 1:3
     subplot(3,1,ii); hold on;
-    plot(estimate_time,truth_data(ii,:)-mu_h(ii,:),'color',[0 0.6588 0.8039]);
-    plot(estimate_time,2*sqrt(sig_h(ii,:)),'color',[0 0.3098 0.4196])
-    plot(estimate_time,-2*sqrt(sig_h(ii,:)),'color',[0 0.3098 0.4196])
+    if ii < 3
+        plot(estimate_time,truth_data(ii,:)-mu_h(ii,:),'color',[0 0.6588 0.8039]);
+    elseif ii == 3
+        heading_err = rad_wrap_pi(truth_data(ii,:)-mu_h(ii,:));
+        plot(estimate_time, heading_err,'color',[0, 0.6588, 0.8039]);
+    end
+    plot(estimate_time,2*sqrt(sig_h(ii,:)),'color',[0, 0.3098, 0.4196])
+    plot(estimate_time,-2*sqrt(sig_h(ii,:)),'color',[0, 0.3098, 0.4196])
     xlabel('Time'); ylabel(labels(3+ii))
     legend('Error','95% Confidence');
 end

@@ -11,33 +11,24 @@ classdef EKF < handle
         tt
         % Landmark Positions
         Lm
-        NLm
         % Noise variables
         QQ
         alph
     end
     methods
         % NN is total number of time pts
-        function self = EKF(mu0, sig0, sig_r, sig_th, alph, Lm, NLm, NN)
+        function self = EKF(mu0, sig0, sig_r, sig_th, alph, Lm, NN)
             self.mu = mu0;
             self.sig = sig0;
             self.mu_h = [self.mu, zeros(3,NN-1)];
             self.sig_h = [diag(self.sig), zeros(3,NN-1)];
             self.K_h = zeros(3,2,NN);
             self.Lm = Lm;
-            self.NLm = NLm;
             self.QQ = [sig_r^2, 0; 0, sig_th^2];
             self.alph = alph;
         end
 
-        function self = update(self, t_idx, dt, uu, zz)
-            self.t_idx = t_idx;
-            self.dt = dt;
-            self.predict(uu);
-            self.correct(zz);
-        end
-
-        function self = predict(self, t_idx, dt, uu)
+        function self = predict(self, t_idx, dt, uu, odom_dt)
             % Unicycle model: [ x+vt*cos(th)*dt;
             %                   y+vt*sin(th)*dt;
             %                   th+wt*dt]
@@ -55,16 +46,22 @@ classdef EKF < handle
                   sin(th)*dt, 0;
                   0, dt];
             % Motion noise
+            % MM  = [self.alph(1)*vt^2 + self.alph(2)*wt^2, 0;
+            %         0, self.alph(3)*vt^2 + self.alph(2)*wt^2];
+            % %
             MM  = [self.alph(1)*vt^2, 0;
                     0, self.alph(2)*wt^2];
-            %
 
             % Update estimates
             mu_update = [vt*cos(th)*dt;
                         vt*sin(th)*dt;
                         rad_wrap_pi(wt*dt)];
             %
-            self.mu = self.mu + mu_update;
+            % test
+            % update_err = mu_update - odom_dt
+
+            % self.mu = self.mu + mu_update;
+            self.mu = self.mu + odom_dt;
             self.mu(3) = rad_wrap_pi(self.mu(3));
             self.sig = GG*self.sig*GG' + VV*MM*VV';
 
@@ -76,8 +73,8 @@ classdef EKF < handle
         function self = correct(self, t_idx, zz)
             % ezpz = 1;
             KK = NaN;
-            for ii = 1:length(self.Lm)
-                if ~isnan(zz(:,ii))
+            for ii = 1:size(self.Lm,2)
+                if ~any(isnan(zz(:,ii)),1)
                     % Unpack landmark and estimate positions
                     mx = self.Lm(1,ii);
                     my = self.Lm(2,ii);
