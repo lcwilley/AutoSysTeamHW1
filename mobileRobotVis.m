@@ -17,7 +17,8 @@ classdef mobileRobotVis < handle
 
             self.radius = 0.5; % Robot radius
 
-            figure(1)
+            f1 = figure(1)
+            clf(f1)
             hold on;
 
             % Record and plot robot position history

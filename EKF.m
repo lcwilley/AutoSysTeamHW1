@@ -28,7 +28,7 @@ classdef EKF < handle
             self.alph = alph;
         end
 
-        function self = predict(self, t_idx, dt, uu, odom_dt)
+        function self = predict(self, t_idx, dt, uu) %, odom_dt, trdt)
             % Unicycle model: [ x+vt*cos(th)*dt;
             %                   y+vt*sin(th)*dt;
             %                   th+wt*dt]
@@ -60,8 +60,8 @@ classdef EKF < handle
             % test
             % update_err = mu_update - odom_dt
 
-            % self.mu = self.mu + mu_update;
-            self.mu = self.mu + odom_dt;
+            self.mu = self.mu + mu_update;
+            % self.mu = self.mu + odom_dt;
             self.mu(3) = rad_wrap_pi(self.mu(3));
             self.sig = GG*self.sig*GG' + VV*MM*VV';
 
@@ -92,12 +92,11 @@ classdef EKF < handle
                     KK = self.sig*HH'/SS;
 
                     % Update estimate
-                    self.mu = self.mu + KK*(zz(:,ii)-zhat);
+                    K_innovation = KK*(zz(:,ii)-zhat);
+                    self.mu = self.mu + K_innovation;
                     self.mu(3) = rad_wrap_pi(self.mu(3));
                     self.sig = (eye(length(self.sig))-KK*HH)*self.sig;
-                    % ezpz = ezpz * sqrt(det(2*pi*SS))*...
-                    %     exp(-1/2*(zz(:,ii)-zhat)'/SS*(zz(:,ii)-zhat));
-                    % %
+
                 end
             end
 
